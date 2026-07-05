@@ -42,9 +42,15 @@ backup_redis() {
   echo "Starting Redis backup..."
   local backup_file="backups/redis_backup_$(date +%Y-%m-%d).rdb"
   local temp_file="${backup_file}.tmp"
-  
-  # Run redis-cli --rdb in the container and stream to host, using docker compose exec -e REDISCLI_AUTH for safety
-  if docker compose exec -T -e REDISCLI_AUTH="$REDIS_PASSWORD" redis redis-cli --rdb - > "$temp_file"; then
+
+  # redis-cli expects --rdb to name a file; it does not define "-" as stdout.
+  # Create the RDB in the container, then stream only its bytes to the host.
+  if docker compose exec -T -e REDISCLI_AUTH="$REDIS_PASSWORD" redis sh -eu -c '
+    temp_rdb=$(mktemp)
+    trap "rm -f \"$temp_rdb\"" EXIT
+    redis-cli --rdb "$temp_rdb" >&2
+    cat "$temp_rdb"
+  ' > "$temp_file"; then
     mv "$temp_file" "$backup_file"
     echo "Redis backup saved to $backup_file"
   else

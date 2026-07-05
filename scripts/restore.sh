@@ -58,6 +58,14 @@ if [ ! -f "$BACKUP_FILE" ]; then
   exit 1
 fi
 
+case "$SERVICE" in
+  postgres|redis) ;;
+  *)
+    echo "Error: Unsupported or unknown service: $SERVICE" >&2
+    exit 1
+    ;;
+esac
+
 # Prompt for confirmation unless --force is specified
 if [ "$FORCE" = false ]; then
   echo "WARNING: Restoring will overwrite existing data for service '$SERVICE'!"
@@ -72,7 +80,12 @@ fi
 restore_postgres() {
   local file="$1"
   echo "Restoring PostgreSQL database from $file..."
-  
+
+  if ! gzip -t "$file"; then
+    echo "Error: PostgreSQL backup is not a valid gzip file" >&2
+    return 1
+  fi
+
   # Decompress SQL on the host and pipe it directly to psql in the container,
   # passing PGPASSWORD via -e and using ON_ERROR_STOP=1 to halt on failures.
   if gunzip -c "$file" | docker compose exec -T -e PGPASSWORD="$PG_PASSWORD" postgres psql -U "$PG_USER" -d "$PG_DB" -v ON_ERROR_STOP=1; then
@@ -87,32 +100,50 @@ restore_postgres() {
 restore_redis() {
   local file="$1"
   echo "Restoring Redis data from $file..."
-  
+
+  echo "Validating Redis backup..."
+  if ! docker compose run --rm -T --no-deps --entrypoint sh redis -eu -c '
+    temp_rdb=$(mktemp)
+    trap "rm -f \"$temp_rdb\"" EXIT
+    cat > "$temp_rdb"
+    redis-check-rdb "$temp_rdb"
+  ' < "$file"; then
+    echo "Error: Redis backup is not a valid RDB file" >&2
+    return 1
+  fi
+
+  # Install the recovery trap before stopping Redis so an interruption cannot
+  # leave the service down between the stop and trap setup.
+  REDIS_NEEDS_RESTART=false
+  ensure_redis_running() {
+    if [ "$REDIS_NEEDS_RESTART" = true ]; then
+      echo "Ensuring Redis container is running..."
+      docker compose start redis || true
+    fi
+  }
+  trap ensure_redis_running EXIT
+  REDIS_NEEDS_RESTART=true
+
   # Stop the running Redis service container to avoid write conflicts
   echo "Stopping Redis container..."
   docker compose stop redis
-  
+
   # Inject the backup RDB file into the volume using a temporary container helper
   echo "Copying backup to Redis data volume..."
   if docker compose run --rm -T --entrypoint sh redis -c 'cat > /data/dump.rdb' < "$file"; then
     echo "Redis data volume updated."
   else
     echo "Error: Failed to write RDB file to Redis volume" >&2
-    echo "Restarting Redis container..."
-    docker compose start redis
     return 1
   fi
-  
+
   # Restart the Redis service container
   echo "Restarting Redis container..."
   docker compose start redis
+  REDIS_NEEDS_RESTART=false
+  trap - EXIT
   echo "Redis data restore completed successfully."
 }
 
 # Dispatch restore based on service name
-if declare -f "restore_$SERVICE" > /dev/null; then
-  "restore_$SERVICE" "$BACKUP_FILE"
-else
-  echo "Error: Unsupported or unknown service: $SERVICE" >&2
-  exit 1
-fi
+"restore_$SERVICE" "$BACKUP_FILE"

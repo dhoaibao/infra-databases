@@ -4,8 +4,6 @@
 # 3. Define and document its new environment variables in `.env.example`.
 # 4. Open its service port (add to PORTS array) in `scripts/setup.sh`.
 
-version: '3.8'
-
 services:
   postgres:
     image: postgres:16.3-alpine
@@ -20,6 +18,11 @@ services:
       - ./services/postgres/init:/docker-entrypoint-initdb.d:ro
     ports:
       - "${TAILSCALE_IP}:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - db-net
 
@@ -27,12 +30,19 @@ services:
     image: redis:7.2.5-alpine
     container_name: redis_db
     restart: unless-stopped
-    command: redis-server /usr/local/etc/redis/redis.conf --requirepass ${REDIS_PASSWORD}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    command: ["sh", "-c", "exec redis-server /usr/local/etc/redis/redis.conf --requirepass \"$$REDIS_PASSWORD\""]
     volumes:
       - redis_data:/data
       - ./services/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
     ports:
       - "${TAILSCALE_IP}:6379:6379"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - db-net
 

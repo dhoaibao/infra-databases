@@ -17,8 +17,11 @@ fi
 
 echo "[2/5] Configuring firewall (UFW) rules..."
 for port in "${PORTS[@]}"; do
-  echo "Allowing Tailscale access to port $port via UFW..."
-  sudo ufw allow from 100.64.0.0/10 to any port "$port"
+  echo "Allowing Tailscale access to port $port via UFW on tailscale0..."
+  # Remove the older interface-agnostic rule, if present, before adding the
+  # interface-scoped rule. Docker ports are also bound to the Tailscale IP.
+  sudo ufw --force delete allow from 100.64.0.0/10 to any port "$port" >/dev/null 2>&1 || true
+  sudo ufw allow in on tailscale0 from 100.64.0.0/10 to any port "$port"
 done
 
 # Clean up any leftover custom DOCKER-USER iptables chains from previous versions

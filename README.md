@@ -31,7 +31,7 @@ Clone the repository on the server and run:
 On the first run, the script:
 
 1. Ensures Tailscale is installed and obtains the server's Tailscale IPv4 address.
-2. Allows `100.64.0.0/10` to reach ports `5432` and `6379` through UFW.
+2. Allows `100.64.0.0/10` on `tailscale0` to reach ports `5432` and `6379` through UFW.
 3. Copies `.env.example` to `.env` and writes `TAILSCALE_IP`.
 4. Exits before starting the databases so credentials can be configured.
 
@@ -81,7 +81,7 @@ The script loads `.env`, creates `backups/` if needed, and writes:
 - `backups/pg_backup_YYYY-MM-DD.sql.gz`
 - `backups/redis_backup_YYYY-MM-DD.rdb`
 
-Files older than seven days are deleted after successful backups. Running the script more than once on the same day replaces that day's files.
+Files older than seven days are deleted after successful backups. Running the script more than once on the same day replaces that day's files. Redis backups are first written inside the container and then streamed to the host as raw RDB data.
 
 For a daily cron job, use the absolute path to your own checkout:
 
@@ -91,7 +91,7 @@ For a daily cron job, use the absolute path to your own checkout:
 
 ## Restores
 
-Restores overwrite service data. PostgreSQL imports the compressed SQL dump into the running database; Redis stops its service, replaces `/data/dump.rdb`, and starts the service again.
+Restores overwrite service data. PostgreSQL checks the gzip integrity and imports the compressed SQL dump into the running database. Redis validates the RDB with `redis-check-rdb`, stops its service, replaces `/data/dump.rdb`, and starts the service again. A cleanup trap attempts to restart Redis if replacement fails.
 
 ```bash
 ./scripts/restore.sh <postgres|redis> <backup-file>
