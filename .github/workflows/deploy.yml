@@ -1,0 +1,74 @@
+name: Deploy to Server
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "docker-compose.yml"
+      - "services/**"
+      - "scripts/**"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy Database Services
+    runs-on: ubuntu-latest
+    environment: Hetzner
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${{ secrets.SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Create .env file
+        env:
+          PG_USER: ${{ secrets.PG_USER }}
+          PG_PASSWORD: ${{ secrets.PG_PASSWORD }}
+          PG_DB: ${{ secrets.PG_DB }}
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+        run: |
+          echo "TAILSCALE_IP=" > .env
+          echo "PG_USER='${PG_USER//\'/\'\\\'\'}'" >> .env
+          echo "PG_PASSWORD='${PG_PASSWORD//\'/\'\\\'\'}'" >> .env
+          echo "PG_DB='${PG_DB//\'/\'\\\'\'}'" >> .env
+          echo "REDIS_PASSWORD='${REDIS_PASSWORD//\'/\'\\\'\'}'" >> .env
+
+      - name: Copy .env file to server
+        run: |
+          scp -P ${{ secrets.SSH_PORT }} .env ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ vars.DEPLOY_PATH }}/.env
+
+      - name: Deploy via SSH
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} -p ${{ secrets.SSH_PORT }} << 'EOF'
+          set -e
+          cd ${{ vars.DEPLOY_PATH }}
+
+          git fetch origin
+          git checkout --force ${{ github.sha }}
+
+          docker compose pull
+          chmod +x scripts/setup.sh
+          ./scripts/setup.sh
+          docker image prune -f
+
+          echo "Deploy completed successfully"
+          EOF
