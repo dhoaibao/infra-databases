@@ -1,0 +1,47 @@
+# To add a new database service to this stack:
+# 1. Add a new service block under `services:` following the pattern below.
+# 2. Create a new configuration/init folder under `services/<name>/` if required.
+# 3. Define and document its new environment variables in `.env.example`.
+# 4. Open its service port (add to PORTS array) in `scripts/setup.sh`.
+
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16.3-alpine
+    container_name: postgres_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PG_USER}
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+      POSTGRES_DB: ${PG_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./services/postgres/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "${TAILSCALE_IP}:5432:5432"
+    networks:
+      - db-net
+
+  redis:
+    image: redis:7.2.5-alpine
+    container_name: redis_db
+    restart: unless-stopped
+    command: redis-server /usr/local/etc/redis/redis.conf --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+      - ./services/redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
+    ports:
+      - "${TAILSCALE_IP}:6379:6379"
+    networks:
+      - db-net
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  db-net:
+    driver: bridge

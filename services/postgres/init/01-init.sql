@@ -1,0 +1,3 @@
+-- Initial setup scripts can be added here.
+-- Any .sql, .sql.gz, or .sh file in this folder will be executed in alphabetical order
+-- when the container is started for the first time (with an empty data directory).
