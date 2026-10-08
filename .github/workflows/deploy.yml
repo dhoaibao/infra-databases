@@ -1,14 +1,11 @@
 name: Deploy to Server
 
+# Manual only: pushing to main does not deploy. Run it from the Actions tab ("Run workflow").
+# To deploy automatically again, add this under `on:` (before `workflow_dispatch:`):
+#   push:
+#     branches: [main]
+#     paths: ["docker-compose.yml", "services/**", "scripts/**", ".github/workflows/deploy.yml"]
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - "docker-compose.yml"
-      - "services/**"
-      - "scripts/**"
-      - ".github/workflows/deploy.yml"
   workflow_dispatch:
 
 concurrency:
