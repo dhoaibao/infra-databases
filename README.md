@@ -121,7 +121,7 @@ Two systemd timers run the jobs through `scripts/scheduled.sh`, which reports to
 | Timer | When | Job | Ping URL key |
 | --- | --- | --- | --- |
 | `infra-db-backup.timer` | daily at 02:00 (up to 10 minutes of random delay; runs after boot if the host was off) | `backup.sh`, then `offsite.sh upload` | `HEALTHCHECK_URL` |
-| `infra-db-maintenance.timer` | Sundays at 03:30 | `offsite.sh prune` and `offsite.sh check` | `HEALTHCHECK_MAINTENANCE_URL` |
+| `infra-db-maintenance.timer` | Sundays at 03:30 | `offsite.sh prune`, `offsite.sh check`, then `verify-backup.sh` | `HEALTHCHECK_MAINTENANCE_URL` |
 
 Create one check per job in healthchecks.io, set its period to match the timer (a day and a week, with some grace time), and put its ping URL in `.env` (and in the matching GitHub secret). The URL is a secret: it is passed to `curl` on stdin rather than as an argument and is never printed, and a URL with unusual characters (quotes, braces, spaces) is rejected with a warning instead of being used. A failing job sends `/fail`; a job that never runs sends nothing, which the service reports as late. Leave the keys empty to run the jobs without monitoring. A monitoring outage does not fail a job.
 
@@ -136,6 +136,8 @@ journalctl -u infra-db-backup.service    # output of the last runs
 ```
 
 The units run as that user and from the checkout's absolute path, so run the script again if either changes. Run a job by hand with `./scripts/scheduled.sh backup` or `./scripts/scheduled.sh maintenance`.
+
+`./scripts/verify-backup.sh` is the restore drill: it replays the newest PostgreSQL dump and roles file into a throwaway container (no network, no published port, data on tmpfs) and runs `redis-check-rdb` on the newest Redis backup. It fails if a backup (or the roles file written by the same run) is missing, older than 48 hours, truncated or not restorable, and never touches the live databases. Restore errors can quote row data, so their details are left out of the output unless you run it in a terminal with `VERIFY_DEBUG=1`. To rebuild after losing the server, follow [`docs/runbooks/recover-databases.md`](docs/runbooks/recover-databases.md); the design choices are in [ADR-001](docs/decisions/ADR-001-backup-and-recovery-design.md).
 
 ## Restores
 

@@ -7,7 +7,8 @@ set -eo pipefail
 #
 # Usage: scripts/scheduled.sh <backup|maintenance>
 #   backup       local backup, then the offsite upload (HEALTHCHECK_URL)
-#   maintenance  offsite retention and integrity check (HEALTHCHECK_MAINTENANCE_URL)
+#   maintenance  offsite retention and integrity check, then the local restore drill
+#                (HEALTHCHECK_MAINTENANCE_URL)
 
 # Change directory to the root of the repository
 cd "$(dirname "$0")/.."
@@ -64,6 +65,7 @@ run_job() {
     maintenance)
       ./scripts/offsite.sh prune || return $?
       ./scripts/offsite.sh check || return $?
+      ./scripts/verify-backup.sh || return $?
       ;;
   esac
 }
