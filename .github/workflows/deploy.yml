@@ -74,6 +74,7 @@ jobs:
           PG_DB: ${{ secrets.PG_DB }}
           REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
         run: |
+          umask 077
           echo "TAILSCALE_IP=" > .env
           echo "PG_USER='${PG_USER//\'/\'\\\'\'}'" >> .env
           echo "PG_PASSWORD='${PG_PASSWORD//\'/\'\\\'\'}'" >> .env
@@ -82,13 +83,20 @@ jobs:
 
       - name: Copy .env file to server
         run: |
-          scp -P ${{ secrets.SSH_PORT }} .env ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ vars.DEPLOY_PATH }}/.env
+          # scp keeps the mode of an existing destination file, so never write the secrets
+          # over .env directly: upload to a fresh private file, then replace .env atomically.
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} -p ${{ secrets.SSH_PORT }} "cd ${{ vars.DEPLOY_PATH }} && rm -f .env.new"
+          scp -P ${{ secrets.SSH_PORT }} .env ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:${{ vars.DEPLOY_PATH }}/.env.new
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} -p ${{ secrets.SSH_PORT }} "cd ${{ vars.DEPLOY_PATH }} && chmod 600 .env.new && mv -f .env.new .env"
 
       - name: Deploy via SSH
         run: |
           ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} -p ${{ secrets.SSH_PORT }} << 'EOF'
           set -e
           cd ${{ vars.DEPLOY_PATH }}
+
+          # Defensive: .env was just replaced with a 600 file; keep it that way
+          chmod 600 .env
 
           git fetch origin
           git checkout --force ${{ github.sha }}

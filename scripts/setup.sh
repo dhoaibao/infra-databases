@@ -39,9 +39,11 @@ echo "[3/5] Setting up environment file..."
 WAS_COPIED=false
 if [ ! -f .env ]; then
   echo "Warning: .env file did not exist. Copied from .env.example."
-  cp .env.example .env
+  install -m 600 .env.example .env
   WAS_COPIED=true
 fi
+# .env holds credentials: restrict it to this user, including a pre-existing file
+chmod 600 .env
 
 # Retrieve Tailscale IP dynamically and write it into .env
 echo "Retrieving Tailscale IP..."

@@ -5,6 +5,9 @@ set -eo pipefail
 # Change directory to the root of the repository
 cd "$(dirname "$0")/.."
 
+# Temporary dump files hold the full database contents: keep them private to this user
+umask 077
+
 # Load credentials from .env
 if [ -f .env ]; then
   # Source .env using allexport to securely preserve spaces, quotes, and symbols

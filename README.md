@@ -45,7 +45,7 @@ PG_DB=change-me
 REDIS_PASSWORD=change-me
 ```
 
-Never commit `.env`. Run setup again after saving it:
+Never commit `.env`. Setup restricts it to mode `600`. Run setup again after saving it:
 
 ```bash
 ./scripts/setup.sh
@@ -81,7 +81,7 @@ The script loads `.env`, creates `backups/` if needed, and writes:
 - `backups/pg_backup_YYYY-MM-DDTHHMMSS.sql.gz`
 - `backups/redis_backup_YYYY-MM-DDTHHMMSS.rdb`
 
-Both files from one run share a timestamp, so runs on the same day never overwrite each other. Files older than seven days are deleted after successful backups. The deploy workflow runs this script on the server before it changes anything, so a failed backup stops the deploy; it is skipped when PostgreSQL is not running (first deploy). Redis backups are first written inside the container and then streamed to the host as raw RDB data. `./scripts/backup.sh [--no-prune] [postgres|redis]` limits a run to one service and can skip pruning.
+The `backups/` directory is set to mode `700` and new files are created `600`, because dumps contain the full data. Both files from one run share a timestamp, so runs on the same day never overwrite each other. Files older than seven days are deleted after successful backups. The deploy workflow runs this script on the server before it changes anything, so a failed backup stops the deploy; it is skipped when PostgreSQL is not running (first deploy). Redis backups are first written inside the container and then streamed to the host as raw RDB data. `./scripts/backup.sh [--no-prune] [postgres|redis]` limits a run to one service and can skip pruning.
 
 For a daily cron job, use the absolute path to your own checkout:
 

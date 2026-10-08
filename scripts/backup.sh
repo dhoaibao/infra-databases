@@ -5,6 +5,9 @@ set -eo pipefail
 # Change directory to the root of the repository
 cd "$(dirname "$0")/.."
 
+# Dumps hold the full database contents: keep new files private to this user
+umask 077
+
 # Load credentials from .env
 if [ -f .env ]; then
   # Source .env using allexport to securely preserve spaces, quotes, and symbols
@@ -17,8 +20,9 @@ else
   exit 1
 fi
 
-# Ensure backups directory exists
+# Ensure backups directory exists and is private (also tightens a pre-existing one)
 mkdir -p backups
+chmod 700 backups
 
 # Serialize runs (cron vs. pre-deploy) so they never write the same files; the lock is
 # released when the script exits.
