@@ -16,6 +16,7 @@ This repository runs self-hosted PostgreSQL and Redis with Docker Compose. Datab
 ### Canonical sources and required change flows
 - `.env.example` is the canonical key list; real values live only in the ignored `.env`. Keep new keys empty there and never print, commit, or hardcode secrets.
 - `.github/workflows/deploy.yml` runs `ci.yml` first, backs up the running databases on the server with the currently deployed scripts, builds `.env` from GitHub environment secrets, copies it to the server over SSH, checks out the pushed SHA, and runs `scripts/setup.sh`. A push to `main` touching `docker-compose.yml`, `services/**`, `scripts/**`, or the workflow deploys to production; a new env key also needs a matching secret and a line in the workflow's `.env` step.
+- Workflow actions are pinned to full commit SHAs with a `# vX.Y.Z` comment; `.github/dependabot.yml` proposes updates weekly. Pin any new action the same way, and review Dependabot PRs before merging, since the deploy workflow holds the SSH key.
 - Adding a service touches, together: its Compose definition and named volume, `services/<service>/` files, `.env.example`, the workflow `.env` step, `PORTS` in `scripts/setup.sh`, the backup/restore functions and dispatch lists, and the README service table and backup notes.
 
 ### Constraints and boundaries
