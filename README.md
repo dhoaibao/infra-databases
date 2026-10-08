@@ -9,7 +9,7 @@ Self-hosted PostgreSQL and Redis services managed with Docker Compose and expose
 | PostgreSQL | `postgres:16.3-alpine` | `5432` | `postgres_data` |
 | Redis | `redis:7.2.5-alpine` | `6379` | `redis_data` |
 
-Both services use the private `db-net` bridge network. Host ports bind to `${TAILSCALE_IP}` rather than `0.0.0.0`.
+Both services use the private `db-net` bridge network. Host ports bind to `${TAILSCALE_IP}` rather than `0.0.0.0`. Container logs rotate (three files of 10 MB per service), and PostgreSQL gets 60 seconds to shut down cleanly before Docker kills it.
 
 ## Prerequisites
 

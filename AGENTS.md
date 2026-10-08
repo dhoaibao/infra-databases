@@ -7,7 +7,7 @@ This repository runs self-hosted PostgreSQL and Redis with Docker Compose. Datab
 ## Project Operating Guide
 
 ### Architecture and change map
-- `docker-compose.yml`: pinned images, `${TAILSCALE_IP}` port bindings, named volumes, healthchecks, and the shared `db-net` bridge.
+- `docker-compose.yml`: pinned images, `${TAILSCALE_IP}` port bindings, named volumes, healthchecks (Postgres has a 30s `start_period`), json-file log rotation (`x-logging`), a 60s Postgres `stop_grace_period`, and the shared `db-net` bridge. Changing a service's definition recreates its container on the next deploy.
 - `services/postgres/init/`: SQL mounted into PostgreSQL's entrypoint init directory.
 - `services/redis/redis.conf`: Redis config mounted read-only; the password is passed on the command line from `REDIS_PASSWORD`.
 - `scripts/setup.sh`: Tailscale detection/install, UFW rules, `.env` bootstrap and validation, `docker compose up -d --wait` (fails when a service is unhealthy).
