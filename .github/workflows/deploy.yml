@@ -81,12 +81,15 @@ jobs:
           OFFSITE_ACCESS_KEY_ID: ${{ secrets.OFFSITE_ACCESS_KEY_ID }}
           OFFSITE_SECRET_ACCESS_KEY: ${{ secrets.OFFSITE_SECRET_ACCESS_KEY }}
           OFFSITE_PASSWORD: ${{ secrets.OFFSITE_PASSWORD }}
+          HEALTHCHECK_URL: ${{ secrets.HEALTHCHECK_URL }}
+          HEALTHCHECK_MAINTENANCE_URL: ${{ secrets.HEALTHCHECK_MAINTENANCE_URL }}
         run: |
           umask 077
           echo "TAILSCALE_IP=" > .env
           for key in PG_USER PG_PASSWORD PG_DB REDIS_PASSWORD \
                      OFFSITE_BACKUP OFFSITE_STORAGE OFFSITE_BUCKET OFFSITE_ENDPOINT OFFSITE_REGION \
-                     OFFSITE_ACCESS_KEY_ID OFFSITE_SECRET_ACCESS_KEY OFFSITE_PASSWORD; do
+                     OFFSITE_ACCESS_KEY_ID OFFSITE_SECRET_ACCESS_KEY OFFSITE_PASSWORD \
+                     HEALTHCHECK_URL HEALTHCHECK_MAINTENANCE_URL; do
             value="${!key}"
             # Scripts read .env with bash and Compose with its own parser. A single-quoted value is
             # literal in both, but neither can hold a single quote (or a newline) inside it.

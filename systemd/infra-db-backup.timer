@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily PostgreSQL and Redis backup
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+RandomizedDelaySec=10min
+# Run once at the next boot if the host was off at 02:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

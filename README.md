@@ -84,11 +84,7 @@ The script loads `.env`, creates `backups/` if needed, and writes:
 
 The `backups/` directory is set to mode `700` and new files are created `600`, because dumps contain the full data. Both files from one run share a timestamp, so runs on the same day never overwrite each other. Files older than seven days are deleted after successful backups. The deploy workflow runs this script on the server before it changes anything, so a failed backup stops the deploy; it is skipped when PostgreSQL is not running (first deploy). Redis backups are first written inside the container and then streamed to the host as raw RDB data. `./scripts/backup.sh [--no-prune] [postgres|redis]` limits a run to one service and can skip pruning.
 
-For a daily cron job, use the absolute path to your own checkout:
-
-```cron
-0 2 * * * /absolute/path/to/infra-databases/scripts/backup.sh >/dev/null 2>&1
-```
+To run backups automatically, see [Scheduled backups and monitoring](#scheduled-backups-and-monitoring).
 
 ## Offsite backups
 
@@ -117,6 +113,29 @@ Any other S3-compatible store (Backblaze B2, Hetzner Object Storage, Wasabi, Min
 `upload` never runs `forget` or `prune`, so it does not delete snapshots or data. Restic still needs read, list and write access, plus delete permission for its short-lived lock files under `locks/`. If your provider supports prefix-scoped policies, give the server's key delete rights only on `locks/` and run `prune` with a broader key from another machine; otherwise the server's key can erase backups, so enable object versioning or object lock at the provider and exempt `locks/` from retention (restic must be able to remove its locks). These scoped policies have not been exercised against a real provider. Restic compresses and deduplicates itself, but the dumps are already gzip-compressed, so expect little deduplication between snapshots.
 
 To recover on a new machine: clone the repository, create `.env` with the `OFFSITE_*` keys (and the database keys), run `./scripts/offsite.sh restore ./restored`, then restore from the files in `./restored/backups` as described below.
+
+## Scheduled backups and monitoring
+
+Two systemd timers run the jobs through `scripts/scheduled.sh`, which reports to [healthchecks.io](https://healthchecks.io/) (or any service with the same `/start` and `/fail` ping convention):
+
+| Timer | When | Job | Ping URL key |
+| --- | --- | --- | --- |
+| `infra-db-backup.timer` | daily at 02:00 (up to 10 minutes of random delay; runs after boot if the host was off) | `backup.sh`, then `offsite.sh upload` | `HEALTHCHECK_URL` |
+| `infra-db-maintenance.timer` | Sundays at 03:30 | `offsite.sh prune` and `offsite.sh check` | `HEALTHCHECK_MAINTENANCE_URL` |
+
+Create one check per job in healthchecks.io, set its period to match the timer (a day and a week, with some grace time), and put its ping URL in `.env` (and in the matching GitHub secret). The URL is a secret: it is passed to `curl` on stdin rather than as an argument and is never printed, and a URL with unusual characters (quotes, braces, spaces) is rejected with a warning instead of being used. A failing job sends `/fail`; a job that never runs sends nothing, which the service reports as late. Leave the keys empty to run the jobs without monitoring. A monitoring outage does not fail a job.
+
+Install the timers once on the server, as the user that owns the checkout (the script calls `sudo` for the system-wide parts):
+
+```bash
+./scripts/install-timers.sh              # writes /etc/systemd/system/infra-db-*.{service,timer} and enables the timers
+./scripts/install-timers.sh --dest /tmp/units   # only render the unit files, to review them
+./scripts/install-timers.sh --uninstall
+systemctl list-timers 'infra-db-*'       # next runs
+journalctl -u infra-db-backup.service    # output of the last runs
+```
+
+The units run as that user and from the checkout's absolute path, so run the script again if either changes. Run a job by hand with `./scripts/scheduled.sh backup` or `./scripts/scheduled.sh maintenance`.
 
 ## Restores
 
