@@ -20,11 +20,23 @@ fi
 # Ensure backups directory exists
 mkdir -p backups
 
+# Serialize runs (cron vs. pre-deploy) so they never write the same files; the lock is
+# released when the script exits.
+exec 9> backups/.backup.lock
+flock 9
+
+# One timestamp per run keeps same-day backups from overwriting each other. Runs are
+# serialized above, so waiting for a free second guarantees unique file names.
+BACKUP_TIMESTAMP=$(date +%Y-%m-%dT%H%M%S)
+while compgen -G "backups/*_backup_${BACKUP_TIMESTAMP}.*" > /dev/null; do
+  sleep 1
+  BACKUP_TIMESTAMP=$(date +%Y-%m-%dT%H%M%S)
+done
+
 # PostgreSQL backup routine
 backup_postgres() {
   echo "Starting PostgreSQL backup..."
-  local backup_file
-  backup_file="backups/pg_backup_$(date +%Y-%m-%d).sql.gz"
+  local backup_file="backups/pg_backup_${BACKUP_TIMESTAMP}.sql.gz"
   local temp_file="${backup_file}.tmp"
   
   # Run pg_dump within the container with credentials passed as environment variables via docker compose exec -e,
@@ -42,8 +54,7 @@ backup_postgres() {
 # Redis backup routine
 backup_redis() {
   echo "Starting Redis backup..."
-  local backup_file
-  backup_file="backups/redis_backup_$(date +%Y-%m-%d).rdb"
+  local backup_file="backups/redis_backup_${BACKUP_TIMESTAMP}.rdb"
   local temp_file="${backup_file}.tmp"
 
   # redis-cli expects --rdb to name a file; it does not define "-" as stdout.
@@ -75,8 +86,8 @@ for service in "${BACKUP_SERVICES[@]}"; do
   fi
 done
 
-# Prune backups older than 7 days generically (excluding .gitkeep)
+# Prune backups older than 7 days generically (excluding .gitkeep and the lock file)
 echo "Pruning backups older than 7 days..."
-find backups/ -type f ! -name ".gitkeep" -mtime +7 -print -delete
+find backups/ -type f ! -name ".gitkeep" ! -name ".backup.lock" -mtime +7 -print -delete
 
 echo "Backup execution finished successfully."

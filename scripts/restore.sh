@@ -45,7 +45,7 @@ done
 # Ensure service and backup file are specified
 if [ -z "$SERVICE" ] || [ -z "$BACKUP_FILE" ]; then
   echo "Usage: $0 [--force] <service_name> <backup_file_path>" >&2
-  echo "Example: $0 postgres pg_backup_2026-07-05.sql.gz" >&2
+  echo "Example: $0 postgres pg_backup_2026-07-05T020000.sql.gz" >&2
   exit 1
 fi
 

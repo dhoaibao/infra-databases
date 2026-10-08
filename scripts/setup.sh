@@ -87,7 +87,12 @@ if [ "$MISSING_OR_EMPTY" = true ]; then
 fi
 
 echo "[4/5] Launching docker compose services..."
-docker compose up -d
+# --wait returns non-zero when a service is unhealthy, so a bad deploy fails here
+if ! timeout 180 docker compose up -d --wait; then
+  echo "Error: services did not become healthy within 180s." >&2
+  docker compose ps >&2 || true
+  exit 4
+fi
 
 echo "[5/5] Retrieving server's Tailscale IP..."
 TAILSCALE_IP=$(tailscale ip -4)

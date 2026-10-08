@@ -44,6 +44,29 @@ jobs:
           echo "${{ secrets.SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
           chmod 600 ~/.ssh/known_hosts
 
+      - name: Back up running databases
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} -p ${{ secrets.SSH_PORT }} << 'EOF'
+          set -e
+          cd ${{ vars.DEPLOY_PATH }}
+
+          # Runs the currently deployed scripts and .env, before anything changes.
+          # Skipped only on a first deploy (no .env, or a successful query that finds no running postgres).
+          if [ ! -f .env ]; then
+            echo "No .env on the server; skipping pre-deploy backup"
+            exit 0
+          fi
+          if ! running=$(docker compose ps --status running -q postgres); then
+            echo "Error: cannot inspect running containers; refusing to deploy without a backup" >&2
+            exit 1
+          fi
+          if [ -n "$running" ]; then
+            ./scripts/backup.sh
+          else
+            echo "No running postgres; skipping pre-deploy backup"
+          fi
+          EOF
+
       - name: Create .env file
         env:
           PG_USER: ${{ secrets.PG_USER }}

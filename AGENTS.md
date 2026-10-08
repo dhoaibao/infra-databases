@@ -10,12 +10,12 @@ This repository runs self-hosted PostgreSQL and Redis with Docker Compose. Datab
 - `docker-compose.yml`: pinned images, `${TAILSCALE_IP}` port bindings, named volumes, healthchecks, and the shared `db-net` bridge.
 - `services/postgres/init/`: SQL mounted into PostgreSQL's entrypoint init directory.
 - `services/redis/redis.conf`: Redis config mounted read-only; the password is passed on the command line from `REDIS_PASSWORD`.
-- `scripts/setup.sh`: Tailscale detection/install, UFW rules, `.env` bootstrap and validation, `docker compose up -d`.
+- `scripts/setup.sh`: Tailscale detection/install, UFW rules, `.env` bootstrap and validation, `docker compose up -d --wait` (fails when a service is unhealthy).
 - `scripts/backup.sh` / `scripts/restore.sh`: per-service `backup_<service>` / `restore_<service>` functions with a dispatch list; seven-day retention in `backups/`.
 
 ### Canonical sources and required change flows
 - `.env.example` is the canonical key list; real values live only in the ignored `.env`. Keep new keys empty there and never print, commit, or hardcode secrets.
-- `.github/workflows/deploy.yml` builds `.env` from GitHub environment secrets, copies it to the server over SSH, checks out the pushed SHA, and runs `scripts/setup.sh`. A push to `main` touching `docker-compose.yml`, `services/**`, `scripts/**`, or the workflow deploys to production; a new env key also needs a matching secret and a line in the workflow's `.env` step.
+- `.github/workflows/deploy.yml` runs `ci.yml` first, backs up the running databases on the server with the currently deployed scripts, builds `.env` from GitHub environment secrets, copies it to the server over SSH, checks out the pushed SHA, and runs `scripts/setup.sh`. A push to `main` touching `docker-compose.yml`, `services/**`, `scripts/**`, or the workflow deploys to production; a new env key also needs a matching secret and a line in the workflow's `.env` step.
 - Adding a service touches, together: its Compose definition and named volume, `services/<service>/` files, `.env.example`, the workflow `.env` step, `PORTS` in `scripts/setup.sh`, the backup/restore functions and dispatch lists, and the README service table and backup notes.
 
 ### Constraints and boundaries

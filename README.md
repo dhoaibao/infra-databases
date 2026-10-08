@@ -51,7 +51,7 @@ Never commit `.env`. Run setup again after saving it:
 ./scripts/setup.sh
 ```
 
-The second run validates the required values and starts the stack with `docker compose up -d`.
+The second run validates the required values and starts the stack with `docker compose up -d --wait`, which fails if a service does not become healthy within 180 seconds.
 
 ## Connecting
 
@@ -78,10 +78,10 @@ Back up both services from the repository checkout:
 
 The script loads `.env`, creates `backups/` if needed, and writes:
 
-- `backups/pg_backup_YYYY-MM-DD.sql.gz`
-- `backups/redis_backup_YYYY-MM-DD.rdb`
+- `backups/pg_backup_YYYY-MM-DDTHHMMSS.sql.gz`
+- `backups/redis_backup_YYYY-MM-DDTHHMMSS.rdb`
 
-Files older than seven days are deleted after successful backups. Running the script more than once on the same day replaces that day's files. Redis backups are first written inside the container and then streamed to the host as raw RDB data.
+Both files from one run share a timestamp, so runs on the same day never overwrite each other. Files older than seven days are deleted after successful backups. The deploy workflow runs this script on the server before it changes anything, so a failed backup stops the deploy; it is skipped when PostgreSQL is not running (first deploy). Redis backups are first written inside the container and then streamed to the host as raw RDB data.
 
 For a daily cron job, use the absolute path to your own checkout:
 
@@ -100,14 +100,14 @@ Restores overwrite service data. PostgreSQL checks the gzip integrity and import
 The backup may be an explicit path or a filename found under `backups/`:
 
 ```bash
-./scripts/restore.sh postgres pg_backup_2026-07-05.sql.gz
-./scripts/restore.sh redis backups/redis_backup_2026-07-05.rdb
+./scripts/restore.sh postgres pg_backup_2026-07-05T020000.sql.gz
+./scripts/restore.sh redis backups/redis_backup_2026-07-05T020000.rdb
 ```
 
 The script asks for confirmation. Use `--force` only for intentional non-interactive restores:
 
 ```bash
-./scripts/restore.sh --force postgres backups/pg_backup_2026-07-05.sql.gz
+./scripts/restore.sh --force postgres backups/pg_backup_2026-07-05T020000.sql.gz
 ```
 
 ## Adding a database service
