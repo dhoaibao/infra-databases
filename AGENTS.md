@@ -21,7 +21,7 @@ This repository runs self-hosted PostgreSQL and Redis with Docker Compose. Datab
 ### Constraints and boundaries
 - Keep images version-pinned, data in named volumes, and ports bound to `${TAILSCALE_IP}`; never bind a database to `0.0.0.0`.
 - `scripts/setup.sh` has host side effects: it can install Tailscale, change UFW/iptables rules, rewrite `TAILSCALE_IP` in `.env`, and start containers. The deploy workflow also runs it.
-- Restores overwrite live data, and Redis restore stops and restarts its container. Backups write and prune files in `backups/`.
+- Restores overwrite live data, and Redis restore stops and restarts its container. A restore first saves the current data via `scripts/backup.sh --no-prune <service>` and aborts if that fails (`--skip-safety-backup` overrides); Postgres restores run in one transaction. Backups write and prune files in `backups/`.
 - PostgreSQL init SQL runs only on a fresh data volume; it is not a migration mechanism for existing data.
 - Scripts must run from the repository root; backup and restore change into it themselves.
 

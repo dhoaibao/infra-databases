@@ -77,7 +77,27 @@ backup_redis() {
 # List of active database backup routines
 BACKUP_SERVICES=(postgres redis)
 
-# Run backups for each configured service
+# Usage: backup.sh [--no-prune] [service...]  (default: every configured service)
+PRUNE=true
+REQUESTED_SERVICES=()
+for arg in "$@"; do
+  case "$arg" in
+    --no-prune) PRUNE=false ;;
+    *) REQUESTED_SERVICES+=("$arg") ;;
+  esac
+done
+
+if [ "${#REQUESTED_SERVICES[@]}" -gt 0 ]; then
+  for service in "${REQUESTED_SERVICES[@]}"; do
+    if ! declare -f "backup_$service" > /dev/null; then
+      echo "Error: Unknown service: $service" >&2
+      exit 1
+    fi
+  done
+  BACKUP_SERVICES=("${REQUESTED_SERVICES[@]}")
+fi
+
+# Run backups for each selected service
 for service in "${BACKUP_SERVICES[@]}"; do
   if declare -f "backup_$service" > /dev/null; then
     "backup_$service"
@@ -87,7 +107,9 @@ for service in "${BACKUP_SERVICES[@]}"; do
 done
 
 # Prune backups older than 7 days generically (excluding .gitkeep and the lock file)
-echo "Pruning backups older than 7 days..."
-find backups/ -type f ! -name ".gitkeep" ! -name ".backup.lock" -mtime +7 -print -delete
+if [ "$PRUNE" = true ]; then
+  echo "Pruning backups older than 7 days..."
+  find backups/ -type f ! -name ".gitkeep" ! -name ".backup.lock" -mtime +7 -print -delete
+fi
 
 echo "Backup execution finished successfully."

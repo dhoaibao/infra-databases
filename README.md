@@ -81,7 +81,7 @@ The script loads `.env`, creates `backups/` if needed, and writes:
 - `backups/pg_backup_YYYY-MM-DDTHHMMSS.sql.gz`
 - `backups/redis_backup_YYYY-MM-DDTHHMMSS.rdb`
 
-Both files from one run share a timestamp, so runs on the same day never overwrite each other. Files older than seven days are deleted after successful backups. The deploy workflow runs this script on the server before it changes anything, so a failed backup stops the deploy; it is skipped when PostgreSQL is not running (first deploy). Redis backups are first written inside the container and then streamed to the host as raw RDB data.
+Both files from one run share a timestamp, so runs on the same day never overwrite each other. Files older than seven days are deleted after successful backups. The deploy workflow runs this script on the server before it changes anything, so a failed backup stops the deploy; it is skipped when PostgreSQL is not running (first deploy). Redis backups are first written inside the container and then streamed to the host as raw RDB data. `./scripts/backup.sh [--no-prune] [postgres|redis]` limits a run to one service and can skip pruning.
 
 For a daily cron job, use the absolute path to your own checkout:
 
@@ -91,7 +91,7 @@ For a daily cron job, use the absolute path to your own checkout:
 
 ## Restores
 
-Restores overwrite service data. PostgreSQL checks the gzip integrity and imports the compressed SQL dump into the running database. Redis validates the RDB with `redis-check-rdb`, stops its service, replaces `/data/dump.rdb`, and starts the service again. A cleanup trap attempts to restart Redis if replacement fails.
+Restores overwrite service data. After validating the backup file, the script first saves the current data of that service with `scripts/backup.sh --no-prune <service>` (a new timestamped file in `backups/`, never pruned by the restore) and aborts if that fails. PostgreSQL decompresses the whole dump into a temporary file first (so a damaged archive is rejected before anything changes) and imports it into the running database in a single transaction, so a failed import rolls back and leaves the previous data intact. Redis validates the RDB with `redis-check-rdb`, stops its service, replaces `/data/dump.rdb`, and starts the service again. A cleanup trap attempts to restart Redis if replacement fails.
 
 ```bash
 ./scripts/restore.sh <postgres|redis> <backup-file>
@@ -109,6 +109,8 @@ The script asks for confirmation. Use `--force` only for intentional non-interac
 ```bash
 ./scripts/restore.sh --force postgres backups/pg_backup_2026-07-05T020000.sql.gz
 ```
+
+If the service is down and the safety backup cannot run, add `--skip-safety-backup` to restore without it. The current data is then not saved.
 
 ## Adding a database service
 
