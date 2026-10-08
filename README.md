@@ -128,6 +128,9 @@ Do not expose a database port on `0.0.0.0`. Initialization files such as Postgre
 Run non-mutating checks after configuration or script changes:
 
 ```bash
-bash -n scripts/setup.sh scripts/backup.sh scripts/restore.sh
+for script in scripts/*.sh; do bash -n "$script" || break; done
+shellcheck scripts/*.sh
 docker compose config --quiet
 ```
+
+The same checks run in `.github/workflows/ci.yml` on pull requests, and the deploy workflow requires them to pass before it connects to the server.

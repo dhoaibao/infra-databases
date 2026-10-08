@@ -65,6 +65,7 @@ fi
 
 # Source the .env file to evaluate actual values (resolving quotes, duplicates, etc.)
 set -a
+# shellcheck source=/dev/null
 source .env
 set +a
 

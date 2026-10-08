@@ -16,8 +16,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate:
+    name: Validate
+    uses: ./.github/workflows/ci.yml
+
   deploy:
     name: Deploy Database Services
+    needs: validate
     runs-on: ubuntu-latest
     environment: Hetzner
     env:

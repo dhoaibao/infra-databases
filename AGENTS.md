@@ -30,8 +30,9 @@ Create and update project docs by following `docs/README.md`.
 
 ## Verification
 ```bash
-bash -n scripts/setup.sh scripts/backup.sh scripts/restore.sh
+for script in scripts/*.sh; do bash -n "$script" || break; done
+shellcheck scripts/*.sh
 docker compose config --quiet
 ```
-Use `docker compose ps` only to inspect an existing deployment. Gap: no shell linting, tests, or pre-deploy check exists in CI; the deploy workflow does not run the commands above.
+Use `docker compose ps` only to inspect an existing deployment. `.github/workflows/ci.yml` runs the same checks (Compose with placeholder values) on pull requests, and the deploy workflow requires it to pass first. Gap: no automated tests exist.
 <!-- b-init-managed:end -->

@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  pull_request:
+    paths:
+      - "docker-compose.yml"
+      - "services/**"
+      - "scripts/**"
+      - ".github/workflows/**"
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate scripts and Compose
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check shell syntax
+        run: for script in scripts/*.sh; do bash -n "$script" || exit 1; done
+
+      - name: Lint shell scripts
+        run: shellcheck scripts/*.sh
+
+      - name: Validate Compose file
+        run: |
+          # Placeholder values only; this job never receives secrets.
+          printf '%s\n' \
+            'TAILSCALE_IP=100.64.0.1' \
+            'PG_USER=ci' \
+            'PG_PASSWORD=ci' \
+            'PG_DB=ci' \
+            'REDIS_PASSWORD=ci' > "$RUNNER_TEMP/ci.env"
+          docker compose --env-file "$RUNNER_TEMP/ci.env" config --quiet

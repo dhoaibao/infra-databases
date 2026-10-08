@@ -9,6 +9,7 @@ cd "$(dirname "$0")/.."
 if [ -f .env ]; then
   # Source .env using allexport to securely preserve spaces, quotes, and symbols
   set -a
+  # shellcheck source=/dev/null
   source .env
   set +a
 else
@@ -69,7 +70,7 @@ esac
 # Prompt for confirmation unless --force is specified
 if [ "$FORCE" = false ]; then
   echo "WARNING: Restoring will overwrite existing data for service '$SERVICE'!"
-  read -p "Are you sure you want to proceed? (y/N): " confirm
+  read -r -p "Are you sure you want to proceed? (y/N): " confirm
   if [[ ! "$confirm" =~ ^[yY](es)?$ ]]; then
     echo "Restore aborted."
     exit 0
@@ -115,6 +116,7 @@ restore_redis() {
   # Install the recovery trap before stopping Redis so an interruption cannot
   # leave the service down between the stop and trap setup.
   REDIS_NEEDS_RESTART=false
+  # shellcheck disable=SC2329 # invoked indirectly by the EXIT trap below
   ensure_redis_running() {
     if [ "$REDIS_NEEDS_RESTART" = true ]; then
       echo "Ensuring Redis container is running..."

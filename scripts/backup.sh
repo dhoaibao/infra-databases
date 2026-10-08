@@ -9,6 +9,7 @@ cd "$(dirname "$0")/.."
 if [ -f .env ]; then
   # Source .env using allexport to securely preserve spaces, quotes, and symbols
   set -a
+  # shellcheck source=/dev/null
   source .env
   set +a
 else
@@ -22,7 +23,8 @@ mkdir -p backups
 # PostgreSQL backup routine
 backup_postgres() {
   echo "Starting PostgreSQL backup..."
-  local backup_file="backups/pg_backup_$(date +%Y-%m-%d).sql.gz"
+  local backup_file
+  backup_file="backups/pg_backup_$(date +%Y-%m-%d).sql.gz"
   local temp_file="${backup_file}.tmp"
   
   # Run pg_dump within the container with credentials passed as environment variables via docker compose exec -e,
@@ -40,7 +42,8 @@ backup_postgres() {
 # Redis backup routine
 backup_redis() {
   echo "Starting Redis backup..."
-  local backup_file="backups/redis_backup_$(date +%Y-%m-%d).rdb"
+  local backup_file
+  backup_file="backups/redis_backup_$(date +%Y-%m-%d).rdb"
   local temp_file="${backup_file}.tmp"
 
   # redis-cli expects --rdb to name a file; it does not define "-" as stdout.
