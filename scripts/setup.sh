@@ -7,6 +7,13 @@ PORTS=(5432 6379)
 
 echo "[1/5] Checking Tailscale installation..."
 if ! command -v tailscale >/dev/null 2>&1; then
+  # Installing and `tailscale up` need an interactive login; without a terminal
+  # (e.g. the deploy workflow) they would hang or read the SSH script from stdin.
+  if [ ! -t 0 ]; then
+    echo "Error: Tailscale is not installed and this is a non-interactive run." >&2
+    echo "Run ./scripts/setup.sh once from an interactive shell on the server to install and authenticate it." >&2
+    exit 5
+  fi
   echo "Tailscale is not installed. Installing Tailscale..."
   curl -fsSL https://tailscale.com/install.sh | sh
   echo "Starting Tailscale..."

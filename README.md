@@ -18,7 +18,7 @@ Both services use the private `db-net` bridge network. Host ports bind to `${TAI
 - UFW
 - Root or `sudo` access for Tailscale and firewall configuration
 
-The setup script installs Tailscale with its official install script when the `tailscale` command is unavailable, then runs `sudo tailscale up`.
+The setup script installs Tailscale with its official install script when the `tailscale` command is unavailable, then runs `sudo tailscale up`. This needs an interactive terminal for the login; a non-interactive run (such as the deploy workflow) exits with an error instead, so run `./scripts/setup.sh` once by hand on a new server.
 
 ## First-time setup
 
