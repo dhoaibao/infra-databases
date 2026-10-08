@@ -79,6 +79,7 @@ Back up both services from the repository checkout:
 The script loads `.env`, creates `backups/` if needed, and writes:
 
 - `backups/pg_backup_YYYY-MM-DDTHHMMSS.sql.gz`
+- `backups/pg_globals_YYYY-MM-DDTHHMMSS.sql.gz` (cluster-wide roles with their password hashes, which `pg_dump` does not include)
 - `backups/redis_backup_YYYY-MM-DDTHHMMSS.rdb`
 
 The `backups/` directory is set to mode `700` and new files are created `600`, because dumps contain the full data. Both files from one run share a timestamp, so runs on the same day never overwrite each other. Files older than seven days are deleted after successful backups. The deploy workflow runs this script on the server before it changes anything, so a failed backup stops the deploy; it is skipped when PostgreSQL is not running (first deploy). Redis backups are first written inside the container and then streamed to the host as raw RDB data. `./scripts/backup.sh [--no-prune] [postgres|redis]` limits a run to one service and can skip pruning.
@@ -109,6 +110,14 @@ The script asks for confirmation. Use `--force` only for intentional non-interac
 ```bash
 ./scripts/restore.sh --force postgres backups/pg_backup_2026-07-05T020000.sql.gz
 ```
+
+`restore.sh` restores the database only. On a rebuilt server, replay the roles first (errors for roles that already exist, such as the bootstrap `PG_USER`, are expected):
+
+```bash
+gunzip -c backups/pg_globals_2026-07-05T020000.sql.gz | docker compose exec -T postgres sh -c 'PGPASSWORD="$POSTGRES_PASSWORD" psql -U "$POSTGRES_USER" -d postgres'
+```
+
+Run it from the repository root; it reads the credentials from the container, so nothing needs to be exported in your shell.
 
 If the service is down and the safety backup cannot run, add `--skip-safety-backup` to restore without it. The current data is then not saved.
 

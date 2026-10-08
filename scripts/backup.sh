@@ -53,6 +53,19 @@ backup_postgres() {
     rm -f "$temp_file"
     return 1
   fi
+
+  # pg_dump omits cluster-wide objects, so roles (with their password hashes) are saved
+  # separately; without them a rebuilt server cannot recreate the application users.
+  local globals_file="backups/pg_globals_${BACKUP_TIMESTAMP}.sql.gz"
+  local globals_temp="${globals_file}.tmp"
+  if docker compose exec -T -e PGPASSWORD="$PG_PASSWORD" postgres pg_dumpall -U "$PG_USER" --globals-only | gzip > "$globals_temp"; then
+    mv "$globals_temp" "$globals_file"
+    echo "PostgreSQL roles and globals saved to $globals_file"
+  else
+    echo "Error: PostgreSQL globals backup failed" >&2
+    rm -f "$globals_temp"
+    return 1
+  fi
 }
 
 # Redis backup routine
