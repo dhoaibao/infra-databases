@@ -2,36 +2,36 @@
 # Agent Instructions
 
 ## Repository Purpose
-This repository runs self-hosted PostgreSQL and Redis services with Docker Compose. Database ports bind to the host's Tailscale address, while `scripts/setup.sh` configures UFW access for the Tailscale network (`100.64.0.0/10`).
+This repository runs self-hosted PostgreSQL and Redis with Docker Compose. Database ports bind only to the host's Tailscale IPv4 address, and `scripts/setup.sh` opens them in UFW for the Tailscale range (`100.64.0.0/10`) on `tailscale0`.
 
-## Codebase Map
-- `docker-compose.yml`: PostgreSQL and Redis images, Tailscale-only port bindings, named volumes, and the shared bridge network.
-- `services/postgres/init/`: SQL mounted into PostgreSQL's entrypoint initialization directory.
-- `services/redis/redis.conf`: Redis runtime configuration mounted read-only by Compose.
-- `scripts/setup.sh`: Tailscale detection, UFW rules, `.env` bootstrap, credential validation, and stack startup.
-- `scripts/backup.sh`: PostgreSQL and Redis backups plus seven-day retention pruning.
-- `scripts/restore.sh`: Confirmed or `--force` restoration for supported services.
-- `.env.example`: Canonical list of required environment keys; `.env` holds local values and is ignored.
+## Project Operating Guide
 
-## Working Rules
-- Keep images explicitly version-pinned, persistent data in named volumes, and service ports bound to `${TAILSCALE_IP}`. Never introduce a `0.0.0.0` database binding.
-- Put credentials only in `.env`; document new keys with empty values in `.env.example`. Never print, commit, or hardcode local secret values.
-- When adding a service, update its Compose definition, named volume, `.env.example` keys, `PORTS` in `scripts/setup.sh`, and matching backup/restore functions and dispatch lists where applicable.
-- Keep shell scripts runnable from the repository root. Backup and restore scripts already change to that directory themselves.
+### Architecture and change map
+- `docker-compose.yml`: pinned images, `${TAILSCALE_IP}` port bindings, named volumes, healthchecks, and the shared `db-net` bridge.
+- `services/postgres/init/`: SQL mounted into PostgreSQL's entrypoint init directory.
+- `services/redis/redis.conf`: Redis config mounted read-only; the password is passed on the command line from `REDIS_PASSWORD`.
+- `scripts/setup.sh`: Tailscale detection/install, UFW rules, `.env` bootstrap and validation, `docker compose up -d`.
+- `scripts/backup.sh` / `scripts/restore.sh`: per-service `backup_<service>` / `restore_<service>` functions with a dispatch list; seven-day retention in `backups/`.
 
-## Operational Safety
-- Ask before running `scripts/setup.sh`: it can install Tailscale, change UFW/iptables rules, rewrite `TAILSCALE_IP` in `.env`, and start containers.
-- Ask before running backup or restore commands. Backups create and prune files; restores overwrite live database data and Redis restoration stops and restarts its container.
-- Ask before changing firewall rules, starting/stopping services, deleting backups or volumes, or modifying live data.
-- PostgreSQL initialization SQL only runs when a fresh data directory is initialized; do not treat edits there as migrations for existing volumes.
+### Canonical sources and required change flows
+- `.env.example` is the canonical key list; real values live only in the ignored `.env`. Keep new keys empty there and never print, commit, or hardcode secrets.
+- `.github/workflows/deploy.yml` builds `.env` from GitHub environment secrets, copies it to the server over SSH, checks out the pushed SHA, and runs `scripts/setup.sh`. A push to `main` touching `docker-compose.yml`, `services/**`, `scripts/**`, or the workflow deploys to production; a new env key also needs a matching secret and a line in the workflow's `.env` step.
+- Adding a service touches, together: its Compose definition and named volume, `services/<service>/` files, `.env.example`, the workflow `.env` step, `PORTS` in `scripts/setup.sh`, the backup/restore functions and dispatch lists, and the README service table and backup notes.
 
-## Verification Commands
-Run the narrowest non-mutating checks relevant to the change:
+### Constraints and boundaries
+- Keep images version-pinned, data in named volumes, and ports bound to `${TAILSCALE_IP}`; never bind a database to `0.0.0.0`.
+- `scripts/setup.sh` has host side effects: it can install Tailscale, change UFW/iptables rules, rewrite `TAILSCALE_IP` in `.env`, and start containers. The deploy workflow also runs it.
+- Restores overwrite live data, and Redis restore stops and restarts its container. Backups write and prune files in `backups/`.
+- PostgreSQL init SQL runs only on a fresh data volume; it is not a migration mechanism for existing data.
+- Scripts must run from the repository root; backup and restore change into it themselves.
 
+### Documentation
+Create and update project docs by following `docs/README.md`.
+
+## Verification
 ```bash
 bash -n scripts/setup.sh scripts/backup.sh scripts/restore.sh
 docker compose config --quiet
 ```
-
-Use `docker compose ps` only when checking an existing deployment. Treat setup, backup, and restore commands as operations requiring explicit approval, not validation commands.
+Use `docker compose ps` only to inspect an existing deployment. Gap: no shell linting, tests, or pre-deploy check exists in CI; the deploy workflow does not run the commands above.
 <!-- b-init-managed:end -->
