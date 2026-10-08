@@ -59,6 +59,23 @@ services:
     networks:
       - db-net
 
+  # restic client for scripts/offsite.sh. It is in the `tools` profile, so `docker compose up`
+  # never starts it; the script runs it on demand with RESTIC_REPOSITORY exported.
+  offsite:
+    image: restic/restic:0.19.1
+    profiles: ["tools"]
+    logging: *default-logging
+    environment:
+      RESTIC_REPOSITORY: ${RESTIC_REPOSITORY:-}
+      RESTIC_PASSWORD: ${OFFSITE_PASSWORD:-}
+      AWS_ACCESS_KEY_ID: ${OFFSITE_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${OFFSITE_SECRET_ACCESS_KEY:-}
+      AWS_DEFAULT_REGION: ${OFFSITE_REGION:-}
+    volumes:
+      - ./backups:/backups:ro
+    networks:
+      - db-net
+
 volumes:
   postgres_data:
     driver: local

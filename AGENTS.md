@@ -11,6 +11,7 @@ This repository runs self-hosted PostgreSQL and Redis with Docker Compose. Datab
 - `services/postgres/init/`: SQL mounted into PostgreSQL's entrypoint init directory.
 - `services/redis/redis.conf`: Redis config mounted read-only; the password is passed on the command line from `REDIS_PASSWORD`.
 - `scripts/setup.sh`: Tailscale detection/install, UFW rules, `.env` bootstrap and validation, `docker compose up -d --wait` (fails when a service is unhealthy).
+- `scripts/offsite.sh` + the `offsite` service (restic, `tools` profile): optional encrypted offsite copy of `backups/`, driven by the `OFFSITE_*` keys (`OFFSITE_BACKUP=true` enables it; `OFFSITE_STORAGE` is `s3`, `r2` or `oss`). `upload` never forgets or prunes snapshots; `prune` applies retention. It is intentionally not called from `backup.sh`, so an offsite outage cannot block a deploy or a restore.
 - `scripts/backup.sh` / `scripts/restore.sh`: per-service `backup_<service>` / `restore_<service>` functions with a dispatch list; seven-day retention in `backups/`. The Postgres backup also writes `pg_globals_*` (roles and password hashes), which `restore.sh` does not replay; see the README.
 
 ### Canonical sources and required change flows

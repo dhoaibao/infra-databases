@@ -90,6 +90,34 @@ For a daily cron job, use the absolute path to your own checkout:
 0 2 * * * /absolute/path/to/infra-databases/scripts/backup.sh >/dev/null 2>&1
 ```
 
+## Offsite backups
+
+`scripts/offsite.sh` keeps an encrypted copy of `backups/` outside the server, so losing the host does not lose the backups. It uses [restic](https://restic.net/) in a pinned container (the `offsite` service, in the `tools` profile, which `docker compose up` never starts) and is disabled unless `OFFSITE_BACKUP=true`. Settings live in `.env`; for deploys, add each key as a GitHub environment secret (unset secrets become empty values, which keeps the feature off).
+
+| Key | Meaning |
+| --- | --- |
+| `OFFSITE_BACKUP` | `true` enables the feature |
+| `OFFSITE_STORAGE` | `s3` (AWS), `r2` (Cloudflare R2) or `oss` (Alibaba Cloud OSS) |
+| `OFFSITE_BUCKET` | Bucket name; may include a path prefix such as `my-bucket/databases` |
+| `OFFSITE_ENDPOINT` | Host or full `http(s)://` URL. Required for `r2` (`<account-id>.r2.cloudflarestorage.com`) and `oss` (for example `oss-eu-west-1.aliyuncs.com`); optional for `s3`, which defaults to `s3.<region>.amazonaws.com` |
+| `OFFSITE_REGION` | Required for `s3` and `oss`; `r2` defaults to `auto` |
+| `OFFSITE_ACCESS_KEY_ID`, `OFFSITE_SECRET_ACCESS_KEY` | Storage credentials |
+| `OFFSITE_PASSWORD` | Encrypts the repository. If it is lost the backups cannot be read, so keep a copy somewhere other than this server |
+
+Any other S3-compatible store (Backblaze B2, Hetzner Object Storage, Wasabi, MinIO, and so on) works with `OFFSITE_STORAGE=s3` plus `OFFSITE_ENDPOINT` and a region.
+
+```bash
+./scripts/offsite.sh upload      # copy backups/ (creates the repository on first use; never forgets or prunes snapshots)
+./scripts/offsite.sh prune       # keep 7 daily, 4 weekly and 6 monthly snapshots, delete the rest
+./scripts/offsite.sh check       # verify the repository structure and a 5% sample of the data
+./scripts/offsite.sh snapshots   # list snapshots
+./scripts/offsite.sh restore /path/to/dir   # restore the latest snapshot into /path/to/dir/backups
+```
+
+`upload` never runs `forget` or `prune`, so it does not delete snapshots or data. Restic still needs read, list and write access, plus delete permission for its short-lived lock files under `locks/`. If your provider supports prefix-scoped policies, give the server's key delete rights only on `locks/` and run `prune` with a broader key from another machine; otherwise the server's key can erase backups, so enable object versioning or object lock at the provider and exempt `locks/` from retention (restic must be able to remove its locks). These scoped policies have not been exercised against a real provider. Restic compresses and deduplicates itself, but the dumps are already gzip-compressed, so expect little deduplication between snapshots.
+
+To recover on a new machine: clone the repository, create `.env` with the `OFFSITE_*` keys (and the database keys), run `./scripts/offsite.sh restore ./restored`, then restore from the files in `./restored/backups` as described below.
+
 ## Restores
 
 Restores overwrite service data. After validating the backup file, the script first saves the current data of that service with `scripts/backup.sh --no-prune <service>` (a new timestamped file in `backups/`, never pruned by the restore) and aborts if that fails. PostgreSQL decompresses the whole dump into a temporary file first (so a damaged archive is rejected before anything changes) and imports it into the running database in a single transaction, so a failed import rolls back and leaves the previous data intact. Redis validates the RDB with `redis-check-rdb`, stops its service, replaces `/data/dump.rdb`, and starts the service again. A cleanup trap attempts to restart Redis if replacement fails.

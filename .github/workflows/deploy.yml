@@ -73,13 +73,47 @@ jobs:
           PG_PASSWORD: ${{ secrets.PG_PASSWORD }}
           PG_DB: ${{ secrets.PG_DB }}
           REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+          OFFSITE_BACKUP: ${{ secrets.OFFSITE_BACKUP }}
+          OFFSITE_STORAGE: ${{ secrets.OFFSITE_STORAGE }}
+          OFFSITE_BUCKET: ${{ secrets.OFFSITE_BUCKET }}
+          OFFSITE_ENDPOINT: ${{ secrets.OFFSITE_ENDPOINT }}
+          OFFSITE_REGION: ${{ secrets.OFFSITE_REGION }}
+          OFFSITE_ACCESS_KEY_ID: ${{ secrets.OFFSITE_ACCESS_KEY_ID }}
+          OFFSITE_SECRET_ACCESS_KEY: ${{ secrets.OFFSITE_SECRET_ACCESS_KEY }}
+          OFFSITE_PASSWORD: ${{ secrets.OFFSITE_PASSWORD }}
         run: |
           umask 077
           echo "TAILSCALE_IP=" > .env
-          echo "PG_USER='${PG_USER//\'/\'\\\'\'}'" >> .env
-          echo "PG_PASSWORD='${PG_PASSWORD//\'/\'\\\'\'}'" >> .env
-          echo "PG_DB='${PG_DB//\'/\'\\\'\'}'" >> .env
-          echo "REDIS_PASSWORD='${REDIS_PASSWORD//\'/\'\\\'\'}'" >> .env
+          for key in PG_USER PG_PASSWORD PG_DB REDIS_PASSWORD \
+                     OFFSITE_BACKUP OFFSITE_STORAGE OFFSITE_BUCKET OFFSITE_ENDPOINT OFFSITE_REGION \
+                     OFFSITE_ACCESS_KEY_ID OFFSITE_SECRET_ACCESS_KEY OFFSITE_PASSWORD; do
+            value="${!key}"
+            # Scripts read .env with bash and Compose with its own parser. A single-quoted value is
+            # literal in both, but neither can hold a single quote (or a newline) inside it.
+            case "$value" in
+              *\'*|*$'\n'*)
+                echo "::error::Secret $key contains a single quote or a newline, which .env cannot represent; change the secret."
+                exit 1
+                ;;
+            esac
+            echo "$key='$value'" >> .env
+          done
+
+      - name: Validate .env file
+        run: |
+          umask 077
+          # Same file with a placeholder Tailscale IP (the server fills in the real one). Compose
+          # errors can quote the offending line, so their output is discarded.
+          sed 's/^TAILSCALE_IP=.*/TAILSCALE_IP=100.64.0.1/' .env > "$RUNNER_TEMP/validate.env"
+          if ! docker compose --env-file "$RUNNER_TEMP/validate.env" config --quiet >/dev/null 2>&1; then
+            echo "::error::Compose cannot parse the generated .env; check the secret values."
+            exit 1
+          fi
+          if ! (set -a; . "$RUNNER_TEMP/validate.env") >/dev/null 2>&1; then
+            echo "::error::The generated .env cannot be loaded by the shell scripts; check the secret values."
+            exit 1
+          fi
+          rm -f "$RUNNER_TEMP/validate.env"
 
       - name: Copy .env file to server
         run: |
